@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import tkinter as tk
 from tkinter import ttk, filedialog, scrolledtext, messagebox, simpledialog
 import os
@@ -12,7 +14,7 @@ try:
     import keyring
     keyring_available = True
 except ImportError:
-    keyring = False
+    keyring_available = False
 
 def threaded(f):
     def wrapper(*args, **kwargs):
@@ -77,7 +79,9 @@ class PackageJsonFinder(tk.Toplevel):
         self.scrollbar = tk.Scrollbar(boxframe)
         self.scrollbar.pack(side='right', fill='y')
         
-        self.listbox = tk.Listbox(boxframe, width=100, height=17, yscrollcommand=self.scrollbar.set, exportselection=False)
+        self.listbox = tk.Listbox(
+            boxframe, width=100, height=17, yscrollcommand=self.scrollbar.set, exportselection=False
+        )
         self.listbox.pack(side='left', fill='both', expand=True)
         self.scrollbar.config(command=self.listbox.yview)
         self.listbox.bind('<Double-Button-1>', lambda e: self.use_selected())
@@ -138,9 +142,9 @@ class GitHubDashboard(tk.Frame):
         try:
             after = None
             if ':' in remote and remote.endswith('.git'):
-                after = remote.split(':',1)[-1][:-4]
+                after = remote.split(':', 1)[-1][:-4]
             elif '.com/' in remote:
-                after = remote.split('.com/',1)[-1].replace('.git','')
+                after = remote.split('.com/', 1)[-1].replace('.git', '')
             else:
                 return None, None
             
@@ -270,33 +274,12 @@ class GitHubDashboard(tk.Frame):
             return pr_map.get(key)
         
         btn_fr = ttk.Frame(frame)
-        btn_fr.pack(anchor='w', padx=6, pady=(1,4))
+        btn_fr.pack(anchor='w', padx=6, pady=(1, 4))
         
-        btns = {}
-        btns['Approve'] = ttk.Button(
-            btn_fr, text="Approve",
-            command=lambda: self._pr_action(pr_selected(), 'APPROVE', owner, repo, headers, tree)
-        )
-        btns['Approve'].pack(side='left', padx=3)
-        
-        btns['Merge'] = ttk.Button(
-            btn_fr, text="Merge",
-            command=lambda: self._merge_pr(pr_selected(), owner, repo, headers, tree)
-        )
-        btns['Merge'].pack(side='left', padx=3)
-        
-        btns['Req. Changes'] = ttk.Button(
-            btn_fr, text="Req. Changes",
-            command=lambda: self._pr_action(pr_selected(), 'REQUEST_CHANGES', owner, repo, headers, tree)
-        )
-        btns['Req. Changes'].pack(side='left', padx=3)
-        
-        btns['Comment'] = ttk.Button(
-            btn_fr, text="Comment",
-            command=lambda: self._pr_action(pr_selected(), 'COMMENT', owner, repo, headers, tree)
-        )
-        btns['Comment'].pack(side='left', padx=9)
-        
+        ttk.Button(btn_fr, text="Approve", command=lambda: self._pr_action(pr_selected(), 'APPROVE', owner, repo, headers, tree)).pack(side='left', padx=3)
+        ttk.Button(btn_fr, text="Merge", command=lambda: self._merge_pr(pr_selected(), owner, repo, headers, tree)).pack(side='left', padx=3)
+        ttk.Button(btn_fr, text="Req. Changes", command=lambda: self._pr_action(pr_selected(), 'REQUEST_CHANGES', owner, repo, headers, tree)).pack(side='left', padx=3)
+        ttk.Button(btn_fr, text="Comment", command=lambda: self._pr_action(pr_selected(), 'COMMENT', owner, repo, headers, tree)).pack(side='left', padx=9)
         ttk.Button(btn_fr, text="Refresh", command=self.refresh).pack(side='left', padx=10)
         ttk.Button(btn_fr, text="Show PR Reviews", command=lambda: self._show_pr_reviews(pr_selected(), owner, repo, headers)).pack(side='left', padx=2)
     
@@ -319,7 +302,7 @@ class GitHubDashboard(tk.Frame):
         post_url = f"{GITHUB_API}/repos/{owner}/{repo}/pulls/{pr_num}/reviews"
         r = requests.post(post_url, headers=headers, json=payload)
         
-        if r.status_code == 200 or r.status_code == 201:
+        if r.status_code in (200, 201):
             self.app.set_status(f"{event_type} sent for PR #{pr_num}")
         else:
             self.app.set_status(f"Failed: {r.status_code} {r.text}")
@@ -347,26 +330,6 @@ class GitHubDashboard(tk.Frame):
         self.refresh()
     
     @threaded
-    def _comment_on_issue_or_pr(self, obj, owner, repo, headers, is_pr=False):
-        if not obj:
-            return
-        
-        number = obj['number']
-        body = simple_input("GitHub Comment", "Type comment to post:")
-        if not body:
-            return
-        
-        url = f"{GITHUB_API}/repos/{owner}/{repo}/issues/{number}/comments"
-        resp = requests.post(url, headers=headers, json={"body": body})
-        
-        if resp.status_code == 201:
-            self.app.set_status(f"Comment posted on {'PR' if is_pr else 'issue'} #{number}")
-        else:
-            self.app.set_status(f"Failed: {resp.status_code} {resp.text}")
-        
-        self.refresh()
-    
-    @threaded
     def _show_pr_reviews(self, pr, owner, repo, headers):
         if not pr:
             return
@@ -377,11 +340,7 @@ class GitHubDashboard(tk.Frame):
         
         if r.status_code == 200:
             reviews = r.json()
-            out = []
-            for review in reviews:
-                out.append(
-                    f"{review['user']['login']}: {review['state']} ({review.get('body', '')})"
-                )
+            out = [f"{review['user']['login']}: {review['state']} ({review.get('body', '')})" for review in reviews]
             msg = "\n".join(out) if out else "No reviews."
             messagebox.showinfo(f"PR #{pr_num} Reviews", msg)
         else:
@@ -419,7 +378,7 @@ class GitHubDashboard(tk.Frame):
             return issue_map.get(int(sel[0]))
         
         btnrow = ttk.Frame(frame)
-        btnrow.pack(anchor='w', padx=7, pady=(2,6))
+        btnrow.pack(anchor='w', padx=7, pady=(2, 6))
         
         ttk.Button(btnrow, text="Reply", command=lambda: self._comment_on_issue_or_pr(iss_selected(), owner, repo, headers, is_pr=False)).pack(side='left', padx=3)
         ttk.Button(btnrow, text="Edit", command=lambda: self._edit_issue(iss_selected(), owner, repo, headers)).pack(side='left', padx=3)
@@ -427,6 +386,26 @@ class GitHubDashboard(tk.Frame):
         ttk.Button(btnrow, text="Reopen", command=lambda: self._set_issue_state(iss_selected(), owner, repo, headers, 'open')).pack(side='left', padx=4)
         ttk.Button(btnrow, text="React", command=lambda: self._react_to_issue(iss_selected(), owner, repo, headers)).pack(side='left', padx=8)
         ttk.Button(btnrow, text="Refresh", command=self.refresh).pack(side='left', padx=7)
+    
+    @threaded
+    def _comment_on_issue_or_pr(self, obj, owner, repo, headers, is_pr=False):
+        if not obj:
+            return
+        
+        number = obj['number']
+        body = simple_input("GitHub Comment", "Type comment to post:")
+        if not body:
+            return
+        
+        url = f"{GITHUB_API}/repos/{owner}/{repo}/issues/{number}/comments"
+        resp = requests.post(url, headers=headers, json={"body": body})
+        
+        if resp.status_code == 201:
+            self.app.set_status(f"Comment posted on {'PR' if is_pr else 'issue'} #{number}")
+        else:
+            self.app.set_status(f"Failed: {resp.status_code} {resp.text}")
+        
+        self.refresh()
     
     @threaded
     def _edit_issue(self, iss, owner, repo, headers):
@@ -531,8 +510,7 @@ class GitApp(tk.Tk):
         
         self.build_ui()
         self.load_keyring_credentials()
-
-    # --- UI ---
+    
     def build_ui(self):
         # Toolbar
         toolbar = ttk.Frame(self, padding="2 4 2 4")
@@ -552,7 +530,6 @@ class GitApp(tk.Tk):
         
         # Notebook with tabs
         self.notebook = ttk.Notebook(self)
-        
         self.tab_dashboard = GitHubDashboard(self.notebook, self)
         self.tab_main = ttk.Frame(self.notebook)
         self.tab_settings = ttk.Frame(self.notebook)
@@ -562,15 +539,14 @@ class GitApp(tk.Tk):
         self.notebook.add(self.tab_main, text="Version & Push")
         self.notebook.add(self.tab_settings, text="Settings")
         self.notebook.add(self.tab_help, text="Help")
-        
         self.notebook.pack(fill='both', expand=True)
         
         # --- Version & Push tab
         f = self.tab_main
         
-        ttk.Label(f, text="Current project folder:").pack(anchor='w', padx=24, pady=(14,1))
+        ttk.Label(f, text="Current project folder:").pack(anchor='w', padx=24, pady=(14, 1))
         self.project_label = ttk.Label(f, text='(None selected)', foreground='blue')
-        self.project_label.pack(anchor='w', padx=30, pady=(0,8))
+        self.project_label.pack(anchor='w', padx=30, pady=(0, 8))
         
         ttk.Label(f, text="Current git branch:").pack(anchor='w', padx=24)
         ttk.Label(f, textvariable=self.current_branch, foreground='blue').pack(anchor='w', padx=30)
@@ -584,25 +560,25 @@ class GitApp(tk.Tk):
         ttk.Entry(row, textvariable=self.repo_url_var, width=56).pack(side='left', padx=2)
         ttk.Button(row, text="Update Remote URL", command=self.update_git_remote_url).pack(side='left', padx=2)
         
-        ttk.Label(f, text="Current version:").pack(anchor='w', padx=24, pady=(12,0))
-        ttk.Entry(f, textvariable=self.current_version, state='readonly', width=24).pack(padx=30, pady=(0,6))
+        ttk.Label(f, text="Current version:").pack(anchor='w', padx=24, pady=(12, 0))
+        ttk.Entry(f, textvariable=self.current_version, state='readonly', width=24).pack(padx=30, pady=(0, 6))
         
         ttk.Label(f, text="New version:").pack(anchor='w', padx=24)
-        ttk.Entry(f, textvariable=self.new_version, width=24).pack(padx=30, pady=(0,8))
+        ttk.Entry(f, textvariable=self.new_version, width=24).pack(padx=30, pady=(0, 8))
         
         ttk.Label(f, text="Commit message:").pack(anchor='w', padx=24)
         
-        ttk.Label(f, text="Files to stage/unstage:").pack(anchor='w', padx=24, pady=(12,0))
+        ttk.Label(f, text="Files to stage/unstage:").pack(anchor='w', padx=24, pady=(12, 0))
         self.file_listbox = tk.Listbox(f, selectmode='multiple', width=80, height=7)
-        self.file_listbox.pack(padx=30, pady=(0,6))
+        self.file_listbox.pack(padx=30, pady=(0, 6))
         
         btn_row = ttk.Frame(f)
-        btn_row.pack(anchor='w', padx=32, pady=(0,9))
+        btn_row.pack(anchor='w', padx=32, pady=(0, 9))
         ttk.Button(btn_row, text="Stage Selected", command=self.stage_selected).pack(side='left', padx=4)
         ttk.Button(btn_row, text="Unstage Selected", command=self.unstage_selected).pack(side='left', padx=7)
         ttk.Button(btn_row, text="Refresh File List", command=self.refresh_file_list).pack(side='left', padx=7)
         
-        ttk.Entry(f, textvariable=self.commit_msg, width=60).pack(padx=30, pady=(0,8))
+        ttk.Entry(f, textvariable=self.commit_msg, width=60).pack(padx=30, pady=(0, 8))
         
         options = ttk.Frame(f)
         options.pack(fill='x', padx=28, pady=4)
@@ -616,7 +592,7 @@ class GitApp(tk.Tk):
         ttk.Label(f, text="Tags Management", font=('TkDefaultFont', 10, 'bold')).pack(anchor='w', padx=24)
         
         tagrow = ttk.Frame(f)
-        tagrow.pack(anchor='w', padx=32, pady=(2,0))
+        tagrow.pack(anchor='w', padx=32, pady=(2, 0))
         ttk.Label(tagrow, text="Tags: ").pack(side='left')
         self.tag_combo = ttk.Combobox(tagrow, textvariable=self.tag_var, width=40, state="readonly")
         self.tag_combo.pack(side='left', padx=6)
@@ -634,7 +610,7 @@ class GitApp(tk.Tk):
         ttk.Button(f, text="V&P (Version & Push)", command=self.version_and_push, width=24).pack(pady=12)
         
         pull_row = ttk.Frame(f)
-        pull_row.pack(anchor='w', padx=32, pady=(0,4))
+        pull_row.pack(anchor='w', padx=32, pady=(0, 4))
         ttk.Button(pull_row, text="Pull (merge)", command=self.git_pull).pack(side='left', padx=2)
         ttk.Button(pull_row, text="Pull (rebase)", command=self.git_pull_rebase).pack(side='left', padx=6)
         
@@ -647,26 +623,36 @@ class GitApp(tk.Tk):
         self.output_box = scrolledtext.ScrolledText(self.advframe, height=12, state='disabled', wrap='word')
         self.output_box.pack(fill='both', expand=True)
         
-        ttk.Button(f, text="Show/hide git output", command=self.toggle_output).pack(pady=(0,6))
-
-        # --- Settings Tab
+        ttk.Button(f, text="Show/hide git output", command=self.toggle_output).pack(pady=(0, 6))
+        
+        # Settings Tab
         sf = self.tab_settings
-        ttk.Label(sf, text="GitHub Username:").pack(pady=(18,3), anchor='w', padx=20)
+        
+        ttk.Label(sf, text="GitHub Username:").pack(pady=(18, 3), anchor='w', padx=20)
         ttk.Entry(sf, textvariable=self.user_var, width=40).pack(padx=22)
-        ttk.Label(sf, text="GitHub Token (Personal Access Token):").pack(pady=(12,3), anchor='w', padx=20)
+        
+        ttk.Label(sf, text="GitHub Token (Personal Access Token):").pack(pady=(12, 3), anchor='w', padx=20)
         ttk.Entry(sf, textvariable=self.token_var, show="*", width=40).pack(padx=22)
+        
         ttk.Button(sf, text="Save Credentials", command=self.save_keyring_credentials).pack(pady=12)
         ttk.Button(sf, text="Clear Credentials from Keyring", command=self.clear_keyring_credentials).pack(pady=2)
-        ttk.Label(sf, text="Credentials are stored securely using keyring AND also optionally in the global git credential store for command-line operations. Note: git credential store is plain-text.", wraplength=570, foreground="grey").pack(pady=4)
+        
+        ttk.Label(
+            sf,
+            text="Credentials are stored securely using keyring AND also optionally in the global git credential store for command-line operations. Note: git credential store is plain-text.",
+            wraplength=570, foreground="grey"
+        ).pack(pady=4)
+        
         if not keyring_available:
             ttk.Label(sf, text="WARNING: 'keyring' is not installed; secure credential storage is unavailable.", foreground='red').pack(pady=8)
         
-        ttk.Separator(sf, orient='horizontal').pack(fill='x', padx=18, pady=(12,8))
+        ttk.Separator(sf, orient='horizontal').pack(fill='x', padx=18, pady=(12, 8))
         ttk.Button(sf, text="Create Desktop Shortcut", command=self.create_desktop_shortcut).pack(pady=8)
-
-        # --- Help Tab
+        
+        # Help Tab
         hbox = ttk.Frame(self.tab_help)
         hbox.pack(fill='both', expand=True)
+        
         help_text = (
             "GitHub Version & Push Tool – Ultimate Dashboard\n"
             "---------------------------------------------------\n"
@@ -676,35 +662,30 @@ class GitApp(tk.Tk):
             "• Visit Dashboard for real-time PRs, issues, and commit review—all with full in-app actions (merge/approve/comment/edit/close/react/etc).\n"
             "• Store credentials in the OS keyring (never on disk), and use your saved token for extra API actions.\n"
             "• All output, status, and errors are visible for support or debugging.\n"
-            "• Free for all. Open source. Share and build!\n"
-            "How to Update Your Project on GitHub Using This App\n"
-            "\n"
-            "\n"
-            "----------------------------------------------------\n"
+            "• Free for all. Open source. Share and build!\n\n"
+            "How to Update Your Project on GitHub Using This App\n\n"
             "1. Make changes: Edit, add, or remove files in your project.\n"
             "2. Choose your project: Click 'Choose Folder' and select your directory.\n"
-            "   If prompted, pick the correct package.json.\n"
+            " If prompted, pick the correct package.json.\n"
             "3. Stage your changes:\n"
-            "   • Click 'Refresh File List' to show changed files.\n"
-            "   • Select files to include and click 'Stage Selected'.\n"
+            " • Click 'Refresh File List' to show changed files.\n"
+            " • Select files to include and click 'Stage Selected'.\n"
             "4. Enter a commit message: Briefly describe your changes in the 'Commit message' field.\n"
             "5. Commit your changes: Click 'Commit Only' to save the changes locally. (They are not uploaded yet!)\n"
             "6. Pull latest online changes:\n"
-            "   • Click 'Pull (merge)' OR 'Pull (rebase)' to fetch updates from GitHub before pushing.\n"
-            "   • If you see a conflict, resolve it as directed, then stage and commit again.\n"
+            " • Click 'Pull (merge)' OR 'Pull (rebase)' to fetch updates from GitHub before pushing.\n"
+            " • If you see a conflict, resolve it as directed, then stage and commit again.\n"
             "7. Push your changes to GitHub:\n"
-            "   • Click 'V&P (Version & Push)' to upload.\n"
-            "   • Optionally, enter a new version if releasing an update; otherwise, leave blank.\n"
-            "8. Confirm: Visit your GitHub repository online and check your updates.\n"
-            "\n"
+            " • Click 'V&P (Version & Push)' to upload.\n"
+            " • Optionally, enter a new version if releasing an update; otherwise, leave blank.\n"
+            "8. Confirm: Visit your GitHub repository online and check your updates.\n\n"
             "Quick Reference:\n"
             " 1. Edit files locally\n"
             " 2. 'Choose Folder'\n"
             " 3. 'Refresh File List' → select files → 'Stage Selected'\n"
             " 4. Enter commit message → 'Commit Only'\n"
             " 5. 'Pull (merge)' or 'Pull (rebase)'\n"
-            " 6. 'V&P (Version & Push)'\n"
-            "\n"
+            " 6. 'V&P (Version & Push)'\n\n"
             "Tips:\n"
             " - Always commit and pull before pushing.\n"
             " - Use 'Commit Only' as often as you like (for local history) before pushing.\n"
@@ -714,8 +695,8 @@ class GitApp(tk.Tk):
         sct = scrolledtext.ScrolledText(hbox, wrap=tk.WORD, height=20)
         sct.insert(tk.END, help_text)
         sct.config(state='disabled')
-        sct.pack(expand=True, fill='both', padx=12, pady=(10,0))
-
+        sct.pack(expand=True, fill='both', padx=12, pady=(10, 0))
+    
     def commit_only(self):
         if not self.project_dir:
             self.append_output("No project folder selected.")
@@ -726,7 +707,6 @@ class GitApp(tk.Tk):
             self.append_output("Enter a commit message before committing.")
             return
         
-        # Stage all selected files (or prompt user if none selected)
         sel = self.file_listbox.curselection()
         files = [self.file_listbox.get(i) for i in sel]
         if not files:
@@ -739,15 +719,15 @@ class GitApp(tk.Tk):
             self.append_output(f"Error: {status}")
             return
         
-        # Now commit
         cmd = ['git', 'commit', '-m', commit_msg]
         status = self.run_git_command(cmd)
         if status is not True:
             self.append_output(f"Error: {status}")
         else:
             self.append_output("Files committed, but NOT pushed.")
+        
         self.refresh_file_list()
-
+    
     def create_desktop_shortcut(self):
         app_name = "GitHub Version & Push Tool"
         exec_cmd = f"python3 {os.path.abspath(sys.argv[0])}"
@@ -769,7 +749,7 @@ Categories=Development;
         
         self.append_output(f"Shortcut created at {desktop_file}")
         messagebox.showinfo("Shortcut", f"Desktop shortcut created at:\n{desktop_file}")
-
+    
     def clear_fields(self):
         self.package_json_path = ''
         self.project_dir = ''
@@ -785,14 +765,13 @@ Categories=Development;
         self.tag_combo['values'] = ()
         self.tag_var.set('')
         self.new_tag_var.set('')
-
+    
     def select_folder(self):
         self.clear_fields()
         folder = filedialog.askdirectory()
         if not folder:
             return
         
-        # Find all package.json files
         candidates = []
         for dirpath, dirnames, filenames in os.walk(folder):
             for name in filenames:
@@ -808,7 +787,6 @@ Categories=Development;
         elif len(candidates) == 1:
             chosen = candidates[0]
         else:
-            # Multiple package.json files found, let user choose
             dlg = PackageJsonFinder(self, candidates)
             self.wait_window(dlg)
             if dlg.match:
@@ -820,30 +798,38 @@ Categories=Development;
                 return
         
         self.package_json_path = chosen
-        repo_root = os.path.dirname(self.package_json_path)
         
-        # Read version from package.json
+        # Read current version
         try:
             with open(self.package_json_path) as f:
                 data = json.load(f)
-                ver = data.get('version', 'unknown')
-                self.current_version.set(ver)
+            ver = data.get('version', 'unknown')
+            self.current_version.set(ver)
         except Exception as ex:
             self.append_output(f"Error reading package.json: {ex}")
             return
         
+        # Determine git repository root
+        repo_root = subprocess.run(
+            ['git', 'rev-parse', '--show-toplevel'],
+            cwd=os.path.dirname(self.package_json_path),
+            capture_output=True, text=True
+        ).stdout.strip()
+        
+        self.project_dir = repo_root
         self.project_label.config(text=repo_root)
+        
+        # Populate branch and remote
         self.current_branch.set(self.get_branch_name(repo_root) or "Unknown")
         cur_remote = self.get_git_remote_url(repo_root)
         self.current_remote.set(cur_remote or "None set")
         self.repo_url_var.set(cur_remote or "")
-        self.project_dir = repo_root
         
         self.append_output(f"package.json: {chosen}\nVersion: {ver}\nBranch: {self.current_branch.get()} Remote: {cur_remote}")
         self.load_tags()
         self.tab_dashboard.refresh()
         self.update_notif_badge()
-
+    
     def update_notif_badge(self):
         dashboard = self.tab_dashboard
         badge = []
@@ -870,36 +856,67 @@ Categories=Development;
             pass
         
         self.notif_badge.config(text=", ".join(badge) if badge else "")
-
+    
     def refresh_file_list(self):
+        """
+        Refresh the file list showing git status with robust parsing,
+        including proper handling of renamed files (porcelain format).
+        """
         try:
-            result = subprocess.run(['git', 'status', '--porcelain'], cwd=self.project_dir, capture_output=True, text=True)
-            files = []
-            for line in result.stdout.strip().split('\n'):
-                if line:
-                    files.append(line[3:])  # Remove git status prefix
+            result = subprocess.run(
+                ['git', 'status', '--porcelain'],
+                cwd=self.project_dir,
+                capture_output=True,
+                text=True
+            )
             
-            if hasattr(self, 'file_listbox'):
-                self.file_listbox.delete(0, tk.END)
-                for fname in files:
-                    self.file_listbox.insert(tk.END, fname)
+            if result.returncode != 0:
+                self.append_output(f"Git status failed: {result.stderr.strip()}")
+                return
+            
+            files = []
+            for raw in result.stdout.splitlines():
+                line = raw.rstrip('\n')
+                if not line:
+                    continue
+                
+                status, path_data = line[:2], line[3:]
+                
+                if status.startswith('R'):
+                    parts = path_data.split('->', 1)
+                    filename = parts[1].strip() if len(parts) == 2 else path_data.strip()
+                else:
+                    filename = path_data.strip()
+                
+                full = os.path.join(self.project_dir, filename)
+                if os.path.exists(full) or status == '??':
+                    files.append(filename)
+                else:
+                    self.append_output(f"Warning: '{filename}' from git status not found on disk")
+            
+            self.file_listbox.delete(0, tk.END)
+            for fname in files:
+                self.file_listbox.insert(tk.END, fname)
+            
+            self.append_output(f"Found {len(files)} changed file(s)")
+        
         except Exception as ex:
             self.append_output(f"Error listing files: {ex}")
-
+    
     def git_pull(self):
         status = self.run_git_command(['git', 'pull'])
         if status is not True:
             self.append_output(f"Error: {status}")
         else:
             self.append_output("Pulled from remote (merge).")
-
+    
     def git_pull_rebase(self):
         status = self.run_git_command(['git', 'pull', '--rebase'])
         if status is not True:
             self.append_output(f"Error: {status}")
         else:
             self.append_output("Pulled from remote (rebase).")
-
+    
     def stage_selected(self):
         sel = self.file_listbox.curselection()
         files = [self.file_listbox.get(i) for i in sel]
@@ -913,8 +930,9 @@ Categories=Development;
             self.append_output(f"Error: {status}")
         else:
             self.append_output("Files staged.")
+        
         self.refresh_file_list()
-
+    
     def unstage_selected(self):
         sel = self.file_listbox.curselection()
         files = [self.file_listbox.get(i) for i in sel]
@@ -928,8 +946,9 @@ Categories=Development;
             self.append_output(f"Error: {status}")
         else:
             self.append_output("Files unstaged.")
+        
         self.refresh_file_list()
-
+    
     def load_tags(self):
         if not self.project_dir:
             self.append_output("Select a project folder first.")
@@ -940,11 +959,11 @@ Categories=Development;
             tags = [t for t in result.stdout.strip().split('\n') if t]
             self.tag_combo["values"] = tags
             if tags:
-                self.tag_var.set(tags[-1])  # Select the latest tag
+                self.tag_var.set(tags[-1])
             self.append_output("Tag list refreshed.")
         except Exception as ex:
             self.append_output(f"Failed to get tags: {ex}")
-
+    
     def create_tag(self):
         tag = self.new_tag_var.get().strip()
         if not tag:
@@ -960,7 +979,7 @@ Categories=Development;
                 self.append_output(f"Failed to create tag: {result.stderr}")
         except Exception as ex:
             self.append_output(f"Error: {ex}")
-
+    
     def delete_tag(self):
         tag = self.tag_var.get().strip()
         if not tag:
@@ -979,7 +998,7 @@ Categories=Development;
                 self.append_output(f"Failed to delete tag: {result.stderr}")
         except Exception as ex:
             self.append_output(f"Error: {ex}")
-
+    
     def push_tag(self):
         tag = self.tag_var.get().strip()
         if not tag:
@@ -994,7 +1013,7 @@ Categories=Development;
                 self.append_output(f"Failed to push tag: {result.stderr}")
         except Exception as ex:
             self.append_output(f"Error: {ex}")
-
+    
     def get_branch_name(self, repo_dir=None):
         if repo_dir is None:
             repo_dir = self.project_dir
@@ -1006,7 +1025,7 @@ Categories=Development;
         except Exception:
             pass
         return None
-
+    
     def get_git_remote_url(self, repo_dir=None):
         if repo_dir is None:
             repo_dir = self.project_dir
@@ -1018,7 +1037,7 @@ Categories=Development;
         except Exception:
             pass
         return None
-
+    
     def update_git_remote_url(self):
         new_url = self.repo_url_var.get().strip()
         if not new_url:
@@ -1040,9 +1059,10 @@ Categories=Development;
                 self.append_output(f"Error: {msg}")
         except Exception as ex:
             self.append_output(f"Error: {ex}")
-
+    
     def version_and_push(self):
         self.clear_output()
+        
         if not self.project_dir or not self.package_json_path:
             self.append_output("Select a project folder and package.json first.")
             return
@@ -1054,7 +1074,6 @@ Categories=Development;
             self.append_output("You must enter both the new version and commit message.")
             return
         
-        # Update package.json version
         try:
             with open(self.package_json_path, 'r+') as f:
                 data = json.load(f)
@@ -1066,16 +1085,17 @@ Categories=Development;
             
             self.current_version.set(new_ver)
             self.append_output(f"Version updated: {old_ver} → {new_ver}")
+        
         except Exception as ex:
             self.append_output("Failed to update package.json: " + str(ex))
             return
         
-        # Git operations
+        rel_pkg = os.path.relpath(self.package_json_path, self.project_dir)
         commands = [
-            ['git', 'add', 'package.json'],
+            ['git', 'add', rel_pkg],
             ['git', 'commit', '-m', commit_msg],
             ['git', 'tag', f'v{new_ver}'],
-            ['git', 'push']
+            ['git', 'push'],
         ]
         
         if self.push_tags.get():
@@ -1092,13 +1112,12 @@ Categories=Development;
         self.tab_dashboard.refresh()
         self.update_notif_badge()
         self.refresh_file_list()
-
+    
     def run_git_command(self, cmd):
         try:
             result = subprocess.run(cmd, cwd=self.project_dir, capture_output=True, text=True)
             out = (result.stdout or '') + (result.stderr or '')
             
-            # Always show output in the text area
             self.output_box['state'] = 'normal'
             self.output_box.insert('end', f"$ {' '.join(cmd)}\n{out}\n")
             self.output_box['state'] = 'disabled'
@@ -1107,30 +1126,35 @@ Categories=Development;
             if result.returncode != 0:
                 return out.strip()
             return True
+        
         except Exception as ex:
             return str(ex)
-
+    
     def toggle_output(self):
         self.advanced_output_shown = not self.advanced_output_shown
         if self.advanced_output_shown:
             self.advframe.pack(fill='both', expand=True, padx=15, pady=7)
         else:
             self.advframe.pack_forget()
-
+    
     def set_status(self, msg):
         self.status.set(msg)
-
+    
     def clear_output(self):
         self.output_box['state'] = 'normal'
         self.output_box.delete(1.0, tk.END)
         self.output_box['state'] = 'disabled'
-
-    # --- Keyring + Credential Helper Integration ---
+    
+    def append_output(self, msg):
+        self.output_box['state'] = 'normal'
+        self.output_box.insert('end', str(msg) + '\n')
+        self.output_box['state'] = 'disabled'
+        self.output_box.see('end')
+    
     def save_keyring_credentials(self):
         user = self.user_var.get()
         token = self.token_var.get()
         
-        # Save to python keyring, as before
         if not keyring_available:
             messagebox.showerror("Keyring unavailable", "Python 'keyring' package is not installed.")
             return
@@ -1140,21 +1164,19 @@ Categories=Development;
         if token:
             keyring.set_password(SERVICE_NAME, 'github_token', token)
         
-        # Also configure git credential.helper store (plain-text, less secure but easy)
         try:
             subprocess.run(["git", "config", "--global", "credential.helper", "store"])
             git_url = f"https://{user}:{token}@github.com"
-            
             cred_file = os.path.expanduser("~/.git-credentials")
-            already_configured = False
             
+            already_configured = False
             if os.path.exists(cred_file):
                 with open(cred_file, "r") as f:
                     lines = f.readlines()
-                    for line in lines:
-                        if f"https://{user}:" in line and "@github.com" in line:
-                            already_configured = True
-                            break
+                for line in lines:
+                    if f"https://{user}:" in line and "@github.com" in line:
+                        already_configured = True
+                        break
             
             if not already_configured:
                 with open(cred_file, "a") as f:
@@ -1162,15 +1184,10 @@ Categories=Development;
             
             self.append_output("Credentials saved to keyring and git credential store (plain-text).")
             messagebox.showinfo("Credentials", "Saved to both keyring and global git credential store.\n\nNote: This stores your token in plain-text in ~/.git-credentials.")
+        
         except Exception as ex:
             self.append_output(f"Error saving to git credential store: {ex}")
-
-    def append_output(self, msg):
-        self.output_box['state'] = 'normal'
-        self.output_box.insert('end', msg + '\n')
-        self.output_box['state'] = 'disabled'
-        self.output_box.see('end')
-
+    
     def clear_keyring_credentials(self):
         if not keyring_available:
             messagebox.showerror("Keyring unavailable", "Python 'keyring' package is not installed.")
@@ -1189,7 +1206,7 @@ Categories=Development;
         self.user_var.set('')
         self.token_var.set('')
         self.append_output("Credentials erased from keyring.")
-
+    
     def load_keyring_credentials(self):
         if keyring_available:
             try:
@@ -1201,7 +1218,7 @@ Categories=Development;
                     self.token_var.set(token)
             except Exception:
                 pass
-
+    
     def get_token(self):
         if keyring_available:
             try:
